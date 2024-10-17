@@ -37,18 +37,20 @@ const questions = [
   { id: 20, question: "On a scale of 1 to 5, how much do you enjoy learning in group settings?", type: "scale", min: 1, max: 5 },
 ];
 
+type Answer = number | string | null; // Assuming answers can be scale (number) or yes/no (string)
+
 export function SoftUiQuiz() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<{ [key: number]: any }>({});
+  const [answers, setAnswers] = useState<{ [key: number]: Answer }>({});  
   const [submitting, setSubmitting] = useState(false);
   const [submissionMessage, setSubmissionMessage] = useState<string | null>(null);
   
   // Get the function to set the personality report from the store
   const setPersonalityReport = useStore((state: StoreState) => state.setPersonalityReport);
   
-  const handleAnswer = (value: any) => {
+  const handleAnswer = (value: Answer) => {
     setAnswers({ ...answers, [currentQuestion]: value });
-  };
+};
 
   const handleNext = () => {
     if (currentQuestion < questions.length - 1) {
@@ -72,7 +74,7 @@ export function SoftUiQuiz() {
     setSubmissionMessage(null);
     
     try {
-      const response = await fetch('http://localhost:3001/evaluate', {
+      const response = await fetch('https://quiz.dzearilife.com/evaluate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -86,7 +88,7 @@ export function SoftUiQuiz() {
         setPersonalityReport(result.report);  // Save report to Zustand store
         console.log("Store Data:", useStore.getState());
         setSubmissionMessage("Your responses have been submitted successfully!");
-        window.location.href = '/result';
+        window.location.href = '/result.html';
       } else {
         console.error("Error in submission:", response.statusText);
         setSubmissionMessage("There was an error submitting your responses. Please try again.");
@@ -108,10 +110,10 @@ export function SoftUiQuiz() {
           <div className="space-y-4">
             <Label className="text-lg font-medium text-gray-700">{question.question}</Label>
             <Slider
-              min={question.min}
-              max={question.max}
+              min={question.min ?? 0}
+              max={question.max ?? 10}
               step={1}
-              value={[answers[currentQuestion] || question.min]}
+              value={[typeof answers[currentQuestion] === 'number' ? answers[currentQuestion] : question.min ?? 0]}
               onValueChange={(value) => handleAnswer(value[0])}
               className="w-full"
             />
@@ -128,7 +130,7 @@ export function SoftUiQuiz() {
             <Label className="text-lg font-medium text-gray-700">{question.question}</Label>
             <RadioGroup
               onValueChange={handleAnswer}
-              value={answers[currentQuestion]}
+              value={typeof answers[currentQuestion] === 'string' ? answers[currentQuestion] : undefined}
               className="flex flex-col space-y-3"
             >
               {['yes', 'no'].map((value) => (
@@ -152,7 +154,7 @@ export function SoftUiQuiz() {
             <Label className="text-lg font-medium text-gray-700">{question.question}</Label>
             <RadioGroup
               onValueChange={handleAnswer}
-              value={answers[currentQuestion]}
+              value={typeof answers[currentQuestion] === 'string' ? answers[currentQuestion] : undefined}
               className="flex flex-col space-y-3"
             >
               {question.options && question.options.map((option) => (

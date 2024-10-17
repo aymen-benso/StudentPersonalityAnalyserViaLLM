@@ -26,6 +26,13 @@ import {
   Cell,
 } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+// Use the API key from environment variables
+const GEMINI_API_KEY = 'AIzaSyDKyou8EKGnHo8wzTl1knGXAd_6RMm8g4E';
+
+// Initialize GoogleGenerativeAI
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
 
 // Define interfaces for the personality data
 interface Dimension {
@@ -62,101 +69,194 @@ interface PersonalityData {
   feedback: string;
 }
 
-// Function to clean up text
-const cleanText = (text: string): string => {
-  return text
-    .replace(/[*]+/g, "") // Remove asterisks
-    .replace(/[\{\}]/g, "") // Remove curly braces
-    .replace(/\\n/g, " ") // Replace escaped newlines with spaces
-    .replace(/ +/g, " ") // Replace multiple spaces with a single space
-    .replace(/","version":0/g, "") // Remove version number from JSON data
-    .trim(); // Trim whitespace from both ends
-};
-
 
 // Function to map MBTI types to Darija/Arabic names and image paths
 const mbtiToDarija = (type: string): { name: string; imagePath: string } => {
   const mapping: Record<string, { name: string; imagePath: string }> = {
-    INTJ: { name: "Khebach", imagePath: "/images/khebach.png" },
-    INTP: { name: "Calme", imagePath: "/images/calm.png" },
-    ENTJ: { name: "Leader", imagePath: "/images/leader.png" },
-    ENTP: { name: "Clubiste", imagePath: "/images/clubiste.png" },
-    INFJ: { name: "Calme", imagePath: "/images/calm.png" },
-    INFP: { name: "Artist", imagePath: "/images/artist.png" },
-    ENFJ: { name: "Leader", imagePath: "/images/leader.png" },
-    ENFP: { name: "Vivant", imagePath: "/images/vivant.png" },
-    ISTJ: { name: "Dicipliné", imagePath: "/images/disciplined.png" },
-    ISFJ: { name: "Sociable", imagePath: "/images/sociable.png" },
-    ESTJ: { name: "Leader", imagePath: "/images/leader.png" },
-    ESFJ: { name: "Sociable", imagePath: "/images/sociable.png" },
-    ISTP: { name: "Khebach", imagePath: "/images/khebach.png" },
-    ISFP: { name: "Artist", imagePath: "/images/artist.png" },
-    ESTP: { name: "Clubiste", imagePath: "/images/clubiste.png" },
-    ESFP: { name: "Vivant", imagePath: "/images/vivant.png" },
+    INTJ: { name: "Khebach", imagePath: "https://i.postimg.cc/nrWXzSDd/khebach.png" },
+    INTP: { name: "Calme", imagePath: "https://i.postimg.cc/nrWXzSDd/calm.png" },
+    ENTJ: { name: "Leader", imagePath: "https://i.postimg.cc/nrWXzSDd/leader.png" },
+    ENTP: { name: "Clubiste", imagePath: "https://i.postimg.cc/nrWXzSDd/clubiste.png" },
+    INFJ: { name: "Calme", imagePath: "https://i.postimg.cc/nrWXzSDd/calm.png" },
+    INFP: { name: "Artist", imagePath: "https://i.postimg.cc/nrWXzSDd/artist.png" },
+    ENFJ: { name: "Leader", imagePath: "https://i.postimg.cc/nrWXzSDd/leader.png" },
+    ENFP: { name: "Vivant", imagePath: "https://i.postimg.cc/nrWXzSDd/vivant.png" },
+    ISTJ: { name: "Dicipliné", imagePath: "https://i.postimg.cc/nrWXzSDd/dicipline.png" },
+    ISFJ: { name: "Sociable", imagePath: "https://i.postimg.cc/nrWXzSDd/social.png" },
+    ESTJ: { name: "Leader", imagePath: "https://i.postimg.cc/nrWXzSDd/lader.png" },
+    ESFJ: { name: "Sociable", imagePath: "https://i.postimg.cc/nrWXzSDd/social.png" },
+    ISTP: { name: "Khebach", imagePath: "https://i.postimg.cc/nrWXzSDd/khebach.png" },
+    ISFP: { name: "Artist", imagePath: "https://i.postimg.cc/nrWXzSDd/artist.png" },
+    ESTP: { name: "Clubiste", imagePath: "https://i.postimg.cc/nrWXzSDd/clubiste.png" },
+    ESFP: { name: "Vivant", imagePath: "https://i.postimg.cc/nrWXzSDd/vivant.png" },
   };
 
   return mapping[type] || { name: type, imagePath: "/images/default.png" };
 };
 
 
-// Function to parse personality data from raw input
-const parsePersonalityData = (rawData: string): PersonalityData | null => {
+
+
+
+const cleanText = (response: string): string => {
   try {
-    const jsonRegex = /```json([\s\S]*?)```/;
-    const match = rawData.match(jsonRegex);
-
-    if (!match || match.length < 2) {
-      console.error("No valid JSON data found in the input.");
-      return null;
-    }
-
-    let cleanedData = match[1].trim();
-    cleanedData = cleanedData
-      .replace(/\\n/g, "") // Remove escaped newlines
-      .replace(/\\"/g, '"') // Unescape quotes
-      .replace(/\\\//g, "/"); // Unescape forward slashes
-
-    const parsedData = JSON.parse(cleanedData);
-
-    const explanationsRegex = /(\*\*Explanation:\*\*[\s\S]*?)(?=\*\*Important Note:\*\*|$)/;
-    const feedbackRegex = /\*\*Important Note:\*\*\s*([\s\S]+)$/;
-
-    const explanationsMatch = rawData.match(explanationsRegex);
-    const feedbackMatch = rawData.match(feedbackRegex);
-
-    let explanations = explanationsMatch ? cleanText(explanationsMatch[1]) : "";
-    const feedback = feedbackMatch ? cleanText(feedbackMatch[1]) : "";
-
-    return {
-      ...parsedData,
-      explanations,
-      feedback,
-    };
+    return response
+      // Replace escaped newlines with actual newlines
+      .replace(/\\n/g, '\n')
+      // Remove unnecessary newlines and multiple spaces
+      .replace(/\n+/g, ' ')
+      .replace(/\s+/g, ' ')
+      // Remove leading and trailing whitespace
+      .replace(/^\s+|\s+$/g, '')
+      // Remove the entire block starting with { "response": { "candidates": [...] }
+      .replace(/{\s*"response":\s*{\s*"candidates":\s*\[\s*{\s*"content":\s*{\s*"parts":\s*\[\s*{\s*"text":\s*"/g, '')
+      .replace(/"}\s*]\s*}\s*}\s*]\s*}\s*},?/g, '')
+      // Remove "role": "model" sections and trailing commas
+      .replace(/}\s*],\s*"role":\s*"model"\s*},?/g, '')
+      // Remove "finishReason": "STOP", and "index": 0,
+      .replace(/"finishReason":\s*"STOP",?/g, '')
+      .replace(/"index":\s*\d+,?/g, '')
+      // Remove safetyRatings block
+      .replace(/"safetyRatings":\s*\[.*?\],/g, '')
+      // Remove usageMetadata block
+      .replace(/"usageMetadata":\s*{.*?},?/g, '')
+      // Remove "}" followed by another "}" or spaces
+      .replace(/}\s*}/g, '')
+      // Remove any stray asterisks (*)
+      .replace(/\*/g, '')
+      // Final clean-up for stray spaces or commas
+      .replace(/^\s+|\s+$/g, '')
+      .trim();
   } catch (error) {
-    console.error("Error parsing or validating personality data:", error);
-    return null;
+    console.error('Error cleaning text:', error);
+    return 'Error extracting text from response.';
   }
 };
 
+
+
+
+
 // Main component
 const UpdatedResultsDashboard = () => {
+  const [explanations, setExplanations] = useState<string | null>(null);
+
   const [personalityData, setPersonalityData] = useState<PersonalityData | null>(
     null
   );
 
-  useEffect(() => {
-    const storedData = localStorage.getItem("personality-storage");
-    if (storedData) {
-      const parsedPersonalityData = parsePersonalityData(storedData);
-      if (parsedPersonalityData) {
-        setPersonalityData(parsedPersonalityData);
-      } else {
-        alert("Failed to set personality data.");
-      }
+
+  // Add a function to call the Google Gemini API
+const callGeminiAPI = async (data: PersonalityData): Promise<{ explanations: string }> => {
+  try {
+    // Create the prompt for the Gemini
+    const prompt = `Based on the following personality data: 
+      MBTI Type: ${data.mbti.type}, 
+      Big Five Traits: ${data.bigFive.map(trait => `${trait.name}: ${trait.value}%`).join(", ")}, 
+      Learning Styles: ${data.learningStyles.map(style => `${style.name}: ${style.value}%`).join(", ")}, 
+      Social Learning: ${data.socialLearning}, 
+      Independent Learning: ${data.independentLearning}, 
+      Neuroticism Score: ${data.neuroticismScore}, 
+      Leadership Potential: ${data.leadershipPotential ? "Yes" : "No"}, 
+      Collaboration Suitability: ${data.collaborationSuitability ? "Yes" : "No"}. 
+      
+      Please generate detailed explanations and feedback for this user.`;
+
+    // Make the API request
+    const model = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
+    const response = await model.generateContent(prompt);
+    console.log("Response from API:", JSON.stringify(response, null, 2));
+    const explanationApi = JSON.stringify(response, null, 2);
+
+    // Check if the response contains
+
+    if (explanationApi) {
+      const cleaned = cleanText(explanationApi);
+      console.log("Cleaned explanation:", cleaned); 
+      setExplanations( cleaned ); // Update state with the explanation
+      return { explanations: explanationApi };
     } else {
-      alert("No data found in localStorage.");
+      console.error("No candidates found in response:", response);
+      setExplanations("No explanation available from the API."); // Set a fallback explanation
+      return { explanations: "No explanation available from the API." };
     }
+  } catch (error) {
+    console.error("Error fetching explanation and feedback from Gemini API:", error);
+    return { explanations: "Error fetching explanation and feedback from Gemini API." };
+  }
+};
+
+
+
+const parsePersonalityData = async (rawData: string): Promise<PersonalityData | null> => {
+  try {
+    // Log raw data for debugging
+    console.log('Raw data:', rawData);
+
+    // Extract JSON string from raw data
+    const jsonStringMatch = rawData.match(/```json[\s\S]*?```/);
+
+    if (!jsonStringMatch) {
+      console.error('JSON string not found in raw data.');
+      return null; // Return null if JSON string not found
+    }
+
+    let jsonString = jsonStringMatch[0].replace(/```json|```/g, '').trim();
+    jsonString = jsonString.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+
+    // Parse JSON string
+    const parsedData = JSON.parse(jsonString);
+
+    // Call Gemini API to get explanations and feedback
+    const explanations  = await callGeminiAPI(parsedData);
+
+    // Validate that the necessary fields exist in the parsed data
+    if (
+      parsedData.mbti &&
+      parsedData.mbti.type &&
+      Array.isArray(parsedData.mbti.dimensions) &&
+      parsedData.bigFive &&
+      Array.isArray(parsedData.bigFive) &&
+      parsedData.learningStyles &&
+      Array.isArray(parsedData.learningStyles) &&
+      typeof parsedData.socialLearning === 'number' &&
+      typeof parsedData.independentLearning === 'number' &&
+      typeof parsedData.neuroticismScore === 'number' &&
+      typeof parsedData.leadershipPotential === 'boolean' &&
+      typeof parsedData.collaborationSuitability === 'boolean'
+    ) {
+      return {
+        ...parsedData,
+        explanations,
+      }; // Return parsed data if valid
+    } else {
+      console.error('Parsed data is missing required fields.');
+      return null; // Return null if data is invalid
+    }
+  } catch (error) {
+    console.error('Error parsing or validating personality data:', error);
+    return null;
+  }
+};
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const storedData = localStorage.getItem("personality-storage");
+      if (storedData) {
+        const parsedPersonalityData = await parsePersonalityData(storedData);
+        if (parsedPersonalityData) {
+          setPersonalityData(parsedPersonalityData);
+        } else {
+          alert("Failed to set personality data.");
+        }
+      } else {
+        alert("No data found in localStorage.");
+      }
+    };
+  
+    fetchData(); // Call the async function inside useEffect
   }, []);
+  
 
   if (!personalityData) {
     return (
@@ -363,27 +463,19 @@ const UpdatedResultsDashboard = () => {
             </section>
               
               {/* Explanations Section */}
-            <section className="mb-12">
-                      
-            <h3 className="text-2xl font-semibold mb-4 text-gray-800 text-center bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-lg">                9. Explanations
-              </h3>
-              <Card className="bg-white shadow-md rounded-2xl p-6">
-              <p className="text-gray-700 text-center">
-              {personalityData.explanations}
-                </p>
-              </Card>
-            </section>
+              <section className="mb-12">
+                <h3 className="text-2xl font-semibold mb-4 text-gray-800 text-center bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-lg">
+                  9. Explanations
+                </h3>
+                <Card className="bg-white shadow-md rounded-2xl p-6">
+                  <p className="text-gray-700 text-center">
+                    <strong>{explanations}</strong>
+                  </p>
+                </Card>
+              </section>
+
               
-              {/* Feedback Section */}
-            <section className="mb-12">
-            <h3 className="text-2xl font-semibold mb-4 text-gray-800 text-center bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-lg">                10. Feedback
-              </h3>
-              <Card className="bg-white shadow-md rounded-2xl p-6">
-                <p className="text-gray-700 text-center">
-                  {personalityData.feedback}
-                </p>
-              </Card>
-            </section>
+
           </CardContent>
         </Card>
       </div>
